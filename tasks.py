@@ -3,14 +3,21 @@
 # Glassdollar website using the  GraphQL API (https://ranking.glassdollar.com/graphql).
 
 import requests
-import json
+from celery import Celery
 
-class DataFetch:
-    def __init__(self, api_url, headers):
-        self.api_url = api_url
-        self.headers = headers
+app = Celery('tasks', broker='redis://redis:6379/0', backend='redis://redis:6379/0')
+API_URL = 'https://ranking.glassdollar.com/graphql'
 
-    def get_corporates(self):
+HEADERS = {
+    'Content-Type': 'application/json',
+    'Accept': '*/*',
+    'Accept-Encoding': 'gzip, deflate, br, zstd',
+    'Accept-Language': 'en-US,en;q=0.9,tr;q=0.8',
+    'User-Agent': 'Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.188 Safari/537.36 CrKey/1.54.250320',
+    'Origin': 'https://ranking.glassdollar.com',
+    'Referer': 'https://ranking.glassdollar.com/',
+}
+def get_corporates(api_url, headers):
         list_page_query = {
             'operationName': 'TopRankedCorporates',
             'variables': {},
@@ -34,22 +41,18 @@ class DataFetch:
             '''
         }
         try:
-            response = requests.post(self.api_url, json=list_page_query, headers=self.headers)
+            response = requests.post(api_url, json=list_page_query, headers=headers)
             corporates = response.json()['data']['topRankedCorporates'];
         except (requests.exceptions.RequestException, ValueError) as e:
             print(f"An error occurred: {e}")
+            corporates = []
 
         return corporates
 
-    def get_corporate_details(self):
-        result = []
-        corporates = self.get_corporates()
-
+def fetch_corporate_details(api_url, headers, corporate_id):
         detail_query = {
             'operationName': 'CorporateDetails',
-            'variables': {
-                'id': None  # Placeholder for corporate ID
-            },
+            'variables': {'id': corporate_id},
             'query': '''
             query CorporateDetails($id: String!) {
               corporate(id: $id) {
@@ -75,34 +78,24 @@ class DataFetch:
             }
             '''
         }
+        try:
+            response = requests.post(api_url, json=detail_query, headers=headers)
+            details = response.json()['data']['corporate']
+        except (requests.exceptions.RequestException, ValueError) as e:
+            print(f"An error occurred: {e}")
+            details = {}
 
-        for corporate in corporates:
-            detail_query['variables']['id'] = corporate['id']
-            try:
-                response = requests.post(self.api_url, json=detail_query, headers=self.headers)
-                details = response.json()['data']['corporate']
-                result.append(details)
-            except (requests.exceptions.RequestException, ValueError) as e:
-                print(f"An error occurred: {e}")
+        return details
 
-        with open("corporate_details.json", "w") as file:
-            json.dump(result, file, indent=4)
+@app.task(bind=True)
+def fetch_all_corporates(self):
+    corporates = get_corporates(API_URL, HEADERS)
+    details_list = []
 
-        return result
+    for corporate in corporates:
+        corporate_id = corporate['id']
+        details = fetch_corporate_details(API_URL, HEADERS, corporate_id)
+        details_list.append(details)
+        self.update_state(state='PROGRESS', meta={'current': len(details_list), 'total': len(corporates)})
 
-
-api_url = 'https://ranking.glassdollar.com/graphql'
-
-headers = {
-    'Content-Type': 'application/json',
-    'Accept': '*/*',
-    'Accept-Encoding': 'gzip, deflate, br, zstd',
-    'Accept-Language': 'en-US,en;q=0.9,tr;q=0.8',
-    'User-Agent': 'Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.188 Safari/537.36 CrKey/1.54.250320',
-    'Origin': 'https://ranking.glassdollar.com',
-    'Referer': 'https://ranking.glassdollar.com/',
-}
-
-fetcher = DataFetch(api_url, headers)
-data = fetcher.get_corporate_details()
-print(data)
+    return details_list
