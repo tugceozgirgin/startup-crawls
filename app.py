@@ -1,7 +1,7 @@
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from celery.result import AsyncResult
-from tasks import fetch_all_corporates
+from data_fetch import fetch_all_corporates
 
 app = FastAPI()
 

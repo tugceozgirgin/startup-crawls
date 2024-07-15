@@ -1,20 +1,15 @@
-# Base image
+# Use the official Python image from the Docker Hub
 FROM python:3.9-slim
 
-# Set working directory
 WORKDIR /app
 
-# Copy requirements file
-COPY requirements.txt requirements.txt
+COPY requirements.txt ./
 
-# Install dependencies
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application
 COPY . .
 
-# Expose the port FastAPI will run on
-EXPOSE 8000
+ENV CELERY_BROKER_URL=amqp://guest:guest@rabbit:5672//
+ENV CELERY_RESULT_BACKEND=mongodb://mongodb:27017/celery_backend
 
-# Default command
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["celery", "-A", "tasks", "worker", "--loglevel=info"]
