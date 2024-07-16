@@ -1,5 +1,4 @@
 # Celery configuration
-
 broker_url = 'amqp://guest:guest@rabbit:5672'
 result_backend = 'mongodb://mongodb:27017/celery_backend'
 task_serializer = 'json'

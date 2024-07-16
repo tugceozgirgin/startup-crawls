@@ -1,53 +1,38 @@
-from fastapi import FastAPI, BackgroundTasks
-from fastapi.responses import HTMLResponse
-from celery.result import AsyncResult
-from data_fetch import fetch_all_corporates
+import logging
 
+from fastapi import FastAPI
+from celery import Celery
+from celery import group
+from data_fetch import get_corporates
+from tasks import fetch_details_task
 app = FastAPI()
 
-@app.get("/")
-async def root():
-    content = """
-    <html>
-        <head>
-            <title>Corporate Fetch</title>
-        </head>
-        <body>
-            <h1>Hello World</h1>
-        </body>
-    </html>
-    """
-    return HTMLResponse(content=content)
+API_URL = 'https://ranking.glassdollar.com/graphql'
 
-@app.post("/fetch-corporates")
-def fetch_corporates(background_tasks: BackgroundTasks):
-    task = fetch_all_corporates.apply_async()
-    background_tasks.add_task(check_task_status, task.id)
-    return {"message": "Fetching corporate details. Please check back later.", "task_id": task.id}
+HEADERS = {
+    'Content-Type': 'application/json',
+    'Accept': '*/*',
+    'Accept-Encoding': 'gzip, deflate, br, zstd',
+    'Accept-Language': 'en-US,en;q=0.9,tr;q=0.8',
+    'User-Agent': 'Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.188 Safari/537.36 CrKey/1.54.250320',
+    'Origin': 'https://ranking.glassdollar.com',
+    'Referer': 'https://ranking.glassdollar.com/',
+}
+logging.basicConfig(level=logging.INFO)
 
-@app.get("/status/{task_id}")
-def get_status(task_id: str):
-    task_result = AsyncResult(task_id)
-    if task_result.state == 'PENDING':
-        return {"status": "Pending..."}
-    elif task_result.state == 'PROGRESS':
-        return {"status": "In progress..."}
-    elif task_result.state == 'SUCCESS':
-        return {"status": "Completed", "result": task_result.result}
-    else:
-        return {"status": task_result.state}
+@app.post("/crawl_corporates")
+async def start_crawl():
+    try:
+        corporates = get_corporates(API_URL, HEADERS)
 
-def check_task_status(task_id: str):
-    result = AsyncResult(task_id)
-    if result.state == 'SUCCESS':
-        print("Task completed successfully!")
-    elif result.state == 'FAILURE':
-        print("Task failed.")
+        detail_tasks = group(fetch_details_task.s(corporate['id']) for corporate in corporates)
+        result = detail_tasks.apply_async()
+
+        return {"message": "Crawling corporates initiated."}
+    except Exception as e:
+        logging.error(f"Failed to start crawling corporates: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-
-

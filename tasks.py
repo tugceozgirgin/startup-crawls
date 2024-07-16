@@ -27,13 +27,16 @@ def fetch_details_task(corporate_id):
     details = fetch_corporate_details(API_URL, HEADERS, corporate_id)
     return details
 
-@celery.task
+
 def crawl_all_corporates():
     corporates = get_corporates(API_URL, HEADERS)
-    logging.info(f"Fetched corporate ids amk.")
     detail_tasks = group(fetch_details_task.s(corporate['id']) for corporate in corporates)
-    detail_tasks.apply_async()
+    result = detail_tasks.apply_async()
+    result.save()
+    return result.get()
 
-
+@celery.task
+def test_mongodb_connection():
+    return "MongoDB connection is successful!"
 
 
