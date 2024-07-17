@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from celery import Celery
 from celery import group
 from data_fetch import get_corporates
-from tasks import fetch_details_task
+from tasks import fetch_details_task, initialize_task
+
 app = FastAPI()
 
 API_URL = 'https://ranking.glassdollar.com/graphql'
@@ -20,13 +21,15 @@ HEADERS = {
 }
 logging.basicConfig(level=logging.INFO)
 
+def crawl_all_corporates():
+    corporates = get_corporates(API_URL, HEADERS)
+    detail_tasks = group(fetch_details_task.s(corporate['id']) for corporate in corporates)
+    result = detail_tasks.apply_async()
+
 @app.post("/crawl_corporates")
 async def start_crawl():
     try:
-        corporates = get_corporates(API_URL, HEADERS)
-
-        detail_tasks = group(fetch_details_task.s(corporate['id']) for corporate in corporates)
-        result = detail_tasks.apply_async()
+        initialize_task.delay()
 
         return {"message": "Crawling corporates initiated."}
     except Exception as e:

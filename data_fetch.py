@@ -3,6 +3,7 @@
 # Glassdollar website using the  GraphQL API (https://ranking.glassdollar.com/graphql).
 
 import requests
+
 API_URL = 'https://ranking.glassdollar.com/graphql'
 
 HEADERS = {
@@ -14,43 +15,57 @@ HEADERS = {
     'Origin': 'https://ranking.glassdollar.com',
     'Referer': 'https://ranking.glassdollar.com/',
 }
+
+
 def get_corporates(api_url, headers):
-        list_page_query = {
-            'operationName': 'TopRankedCorporates',
-            'variables': {},
-            'query': '''
-            query TopRankedCorporates {
-              topRankedCorporates {
-                id
-                name
-                logo_url
-                industry
-                hq_city
-                startup_partners {
-                  company_name
-                  logo_url: logo
-                  __typename
-                }
-                startup_friendly_badge
-                __typename
-              }
-            }
-            '''
+    corporates = []
+    page = 1
+    has_more = True
+
+    while has_more:
+        corporates_json_data = {
+            "operationName": "Corporates",
+            "variables": {
+                "filters": {
+                    "hq_city": [],
+                    "industry": []
+                },
+                "page": page
+            },
+            "query": "query Corporates($filters: CorporateFilters, $page: Int) {\n  corporates(filters: $filters, page: $page) {\n    rows {\n      id\n      name\n    }\n    count\n  }\n}\n"
         }
         try:
-            response = requests.post(api_url, json=list_page_query, headers=headers)
-            corporates = response.json()['data']['topRankedCorporates'];
-        except (requests.exceptions.RequestException, ValueError) as e:
-            print(f"An error occurred: {e}")
-            corporates = []
+            response = requests.post(api_url, json=corporates_json_data, headers=headers)
+            response_json = response.json()
 
-        return corporates
+            if 'data' in response_json and 'corporates' in response_json['data']:
+                data = response_json['data']['corporates']
+                rows = data['rows']
+                count = data['count']
+
+                if rows:
+                    corporates.extend(rows)
+                    page += 1
+                else:
+                    has_more = False
+
+                if len(corporates) >= count:
+                    has_more = False
+            else:
+                print(f"Response format is not correct.")
+                break
+
+        except (requests.exceptions.RequestException, ValueError) as e:
+            print(f"Error: {e}")
+            break
+    return corporates
+
 
 def fetch_corporate_details(api_url, headers, corporate_id):
-        detail_query = {
-            'operationName': 'CorporateDetails',
-            'variables': {'id': corporate_id},
-            'query': '''
+    detail_query = {
+        'operationName': 'CorporateDetails',
+        'variables': {'id': corporate_id},
+        'query': '''
             query CorporateDetails($id: String!) {
               corporate(id: $id) {
                 name
@@ -74,12 +89,21 @@ def fetch_corporate_details(api_url, headers, corporate_id):
               }
             }
             '''
-        }
-        try:
-            response = requests.post(api_url, json=detail_query, headers=headers)
-            details = response.json()['data']['corporate']
-        except (requests.exceptions.RequestException, ValueError) as e:
-            print(f"An error occurred: {e}")
-            details = {}
+    }
+    try:
+        response = requests.post(api_url, json=detail_query, headers=headers)
+        details = response.json()['data']['corporate']
+    except (requests.exceptions.RequestException, ValueError) as e:
+        print(f"An error occurred: {e}")
+        details = {}
 
-        return details
+    return details
+
+
+corporates = get_corporates(API_URL, HEADERS)
+print(corporates)
+# # for corporate in corporates:
+# #     corporate_id = corporate['id']
+# #     details = fetch_corporate_details(API_URL, HEADERS, corporate_id)
+# #     print(details)
+
