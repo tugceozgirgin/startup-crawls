@@ -98,12 +98,3 @@ def fetch_corporate_details(api_url, headers, corporate_id):
         details = {}
 
     return details
-
-
-corporates = get_corporates(API_URL, HEADERS)
-print(corporates)
-# # for corporate in corporates:
-# #     corporate_id = corporate['id']
-# #     details = fetch_corporate_details(API_URL, HEADERS, corporate_id)
-# #     print(details)
-
