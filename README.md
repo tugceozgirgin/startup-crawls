@@ -17,7 +17,8 @@ Related Links:
 
 Then open the .env file and put your API keys to the corresponding places:
 
-![image](https://github.com/user-attachments/assets/cc61cd22-228e-4321-8710-24c5118dbc79)
+![image](https://github.com/user-attachments/assets/f8dc1394-4240-48f6-a8f3-4b74170b0d00)
+
 
 3) Now it is ready to build
 docker-compose up --build
