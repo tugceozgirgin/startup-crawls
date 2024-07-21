@@ -3,9 +3,11 @@
 ##Installation
 
 1) Clone the repository:
-
+   
+```
 git clone https://github.com/tugceozgirgin/startup-crawls.git
 cd your-repo
+```
 
 2) Get your API keys from Gemini and HuggingFace:
 
@@ -21,8 +23,9 @@ Then open the .env file and put your API keys to the corresponding places:
 
 
 3) Now it is ready to build
+```
 docker-compose up --build
-
+```
 #Running
 
 1) After the build has been completed and the celery ready log appeared, go to http://localhost:8000/docs#/
