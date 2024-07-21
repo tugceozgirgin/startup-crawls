@@ -1,10 +1,9 @@
 import logging
 
+from bson import ObjectId
 from fastapi import FastAPI
-from celery import Celery
-from celery import group
-from data_fetch import get_corporates
-from tasks import fetch_details_task, initialize_task
+from mongo import mongo_client
+from tasks import initialize_task
 
 app = FastAPI()
 
@@ -21,21 +20,35 @@ HEADERS = {
 }
 logging.basicConfig(level=logging.INFO)
 
-def crawl_all_corporates():
-    corporates = get_corporates(API_URL, HEADERS)
-    detail_tasks = group(fetch_details_task.s(corporate['id']) for corporate in corporates)
-    result = detail_tasks.apply_async()
-
 @app.post("/crawl_corporates")
 async def start_crawl():
     try:
-        initialize_task.delay()
-
-        return {"message": "Crawling corporates initiated."}
+        analysis_id = initialize_task()
+        return {"message": "Crawling corporates initiated.", "analysis_id": analysis_id}
     except Exception as e:
         logging.error(f"Failed to start crawling corporates: {str(e)}")
+        return {"error": str(e)}
+
+
+@app.get("/get-results/{analysis_id}")
+async def get_results(analysis_id: str):
+    try:
+        results_db = mongo_client["results_db"]["results"]
+        result_entries = list(results_db.find({"_id": ObjectId(analysis_id)}))
+
+        if not result_entries:
+            return {"message": "Analysis_id not found."}
+        if result_entries[0]["status"] == "PENDING":
+            return {"message": "Task is pending."}
+        elif result_entries[0]["status"] == "SUCCESS":
+            return {"results": result_entries[0]["clusters"]}
+
+    except Exception as e:
+        logging.error(f"Failed to fetch results: {str(e)}")
+        return {"error": str(e)}
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
